@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Control de Consumibles</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            indDark: '#1e2022',
+            indCard: '#2a2d30',
+            indElevated: '#34383c',
+            indBorder: '#454a50',
+            indGreen: '#22c55e',
+            indGreenLight: '#4ade80',
+            indRed: '#ef4444',
+            indRedLight: '#f87171',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #1e2022;
+      color: #d1d5db;
+      font-family: 'Inter', sans-serif;
+      overscroll-behavior-y: contain;
+    }
+    /* Ocultar scrollbar horizontal en chips de filtro */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* Animación sutil de feedback táctil */
+    .btn-press:active {
+      transform: scale(0.96);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-indDark text-gray-200 select-none pb-24">
+
+  <!-- HEADER FIJO SUPERIOR -->
+  <header class="sticky top-0 z-30 bg-indCard border-b border-indBorder px-4 py-3 shadow-lg">
+    <div class="max-w-lg mx-auto flex items-center justify-between gap-2">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-indGreen animate-pulse"></span>
+          <h1 class="text-lg font-extrabold tracking-tight text-indGreenLight uppercase">
+            Control de Consumibles
+          </h1>
+        </div>
+        <p class="text-xs text-indRedLight font-semibold mt-0.5" id="headerStats">
+          0 ítems · 0 unidades consumidas
+        </p>
+      </div>
+      <button
+        onclick="openModalNuevo()"
+        class="btn-press bg-indGreen hover:bg-green-500 text-indDark font-extrabold text-sm px-3.5 py-2.5 rounded-xl shadow-md flex items-center gap-1.5 border border-green-300/30"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 stroke-[2.8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>Nuevo</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR PRINCIPAL -->
+  <main class="flex-1 w-full max-w-lg mx-auto px-3 pt-3">
+
+    <!-- BANNER DE EJEMPLOS PRECARGADOS (Solo visible si están activos) -->
+    <div id="demoBanner" class="hidden mb-3 bg-indElevated border border-indRed/60 rounded-xl p-3 flex items-center justify-between gap-2">
+      <div class="text-xs">
+        <span class="text-indRedLight font-bold uppercase block">Datos de ejemplo cargados</span>
+        <span class="text-gray-300">Podés usarlos o borrarlos para arrancar limpio.</span>
+      </div>
+      <button
+        onclick="limpiarEjemplos()"
+        class="btn-press shrink-0 bg-indRed/20 hover:bg-indRed/30 text-indRedLight border border-indRed font-bold text-xs px-3 py-2 rounded-lg"
+      >
+        Limpiar ejemplos
+      </button>
+    </div>
+
+    <!-- VISTA 1: CONSUMIBLES ACUMULADOS -->
+    <section id="viewConsumibles" class="space-y-3">
+      <!-- Buscador rápido -->
+      <div class="relative">
+        <input
+          type="text"
+          id="searchInput"
+          oninput="renderConsumibles()"
+          placeholder="Buscar consumible (ej: disco, electrodo, guante)..."
+          class="w-full bg-indCard border border-indBorder focus:border-indGreen rounded-xl pl-10 pr-10 py-3 text-sm text-indGreenLight placeholder-gray-400 outline-none transition"
+        />
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indRedLight absolute left-3 top-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+        </svg>
+        <button
+          id="clearSearchBtn"
+          onclick="clearSearch()"
+          class="hidden absolute right-2.5 top-2.5 text-indRedLight bg-indElevated px-2 py-1 rounded-lg text-xs font-bold"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Filtro horizontal por Categoría -->
+      <div id="categoryChips" class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        <!-- Se genera dinámicamente -->
+      </div>
+
+      <!-- Lista de tarjetas de consumibles -->
+      <div id="consumiblesList" class="space-y-3">
+        <!-- Tarjetas generadas dinámicamente -->
+      </div>
+    </section>
+
+    <!-- VISTA 2: HISTORIAL DE MOVIMIENTOS -->
+    <section id="viewHistorial" class="hidden space-y-3">
+      <div class="bg-indCard border border-indBorder rounded-xl p-3 flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-indGreenLight uppercase">Registro Cronológico</h2>
+          <p class="text-xs text-indRedLight" id="historialCount">0 movimientos registrados</p>
+        </div>
+        <span class="text-[11px] bg-indElevated border border-indBorder px-2.5 py-1 rounded-lg text-gray-300 font-semibold">
+          Más recientes arriba
+        </span>
+      </div>
+
+      <div id="historialList" class="space-y-2">
+        <!-- Movimientos generados dinámicamente -->
+      </div>
+    </section>
+
+    <!-- VISTA 3: EXPORTAR Y RESPALDO -->
+    <section id="viewDatos" class="hidden space-y-3">
+      <div class="bg-indCard border border-indBorder rounded-xl p-4 space-y-4">
+        <div>
+          <h2 class="text-base font-extrabold text-indGreenLight uppercase">Exportar e Informes</h2>
+          <p class="text-xs text-gray-300 mt-1">
+            Descargá el consumo acumulado y el historial detallado para abrir directo en Excel.
+          </p>
+        </div>
+
+        <button
+          onclick="exportarCSV()"
+          class="btn-press w-full bg-indGreen hover:bg-green-500 text-indDark font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+          </svg>
+          <span>Descargar Excel (CSV)</span>
+        </button>
+
+        <div class="border-t border-indBorder pt-4 space-y-2.5">
+          <h3 class="text-xs font-bold uppercase text-indRedLight tracking-wider">Copia de Seguridad (JSON)</h3>
+          <div class="grid grid-cols-2 gap-2.5">
+            <button
+              onclick="exportarJSON()"
+              class="btn-press bg-indElevated hover:bg-gray-600 border border-indBorder text-indGreenLight font-bold text-xs py-3 px-3 rounded-xl flex items-center justify-center gap-1.5"
+            >
+              <span>Guardar Respaldo</span>
+            </button>
+            <label class="btn-press bg-indElevated hover:bg-gray-600 border border-indBorder text-indGreenLight font-bold text-xs py-3 px-3 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer text-center">
+              <span>Cargar Respaldo</span>
+              <input type="file" accept=".json" onchange="importarJSON(event)" class="hidden" />
+            </label>
+          </div>
+        </div>
+
+        <!-- Zona peligrosa: Reinicio con doble confirmación -->
+        <div class="border-t border-indBorder pt-4 space-y-2">
+          <h3 class="text-xs font-bold uppercase text-indRedLight tracking-wider">Zona de Reinicio</h3>
+          <p class="text-xs text-gray-300">
+            Poné en cero los contadores acumulados (mantiene la lista de consumibles) o borrá todo.
+          </p>
+          <div class="grid grid-cols-1 gap-2 pt-1">
+            <button
+              id="btnResetContadores"
+              onclick="confirmarResetContadores()"
+              class="btn-press w-full bg-indRed/15 hover:bg-indRed/25 border border-indRed text-indRedLight font-extrabold text-xs py-3 px-4 rounded-xl transition"
+            >
+              Poner Contadores en 0
+            </button>
+            <button
+              id="btnResetTodo"
+              onclick="confirmarResetTodo()"
+              class="btn-press w-full bg-indRed hover:bg-red-600 text-white font-extrabold text-xs py-3 px-4 rounded-xl transition"
+            >
+              Borrar Todo el Sistema
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- NAVEGACIÓN INFERIOR TÁCTIL (Para usar con el pulgar) -->
+  <nav class="fixed bottom-0 inset-x-0 z-30 bg-indCard border-t border-indBorder shadow-2xl">
+    <div class="max-w-lg mx-auto grid grid-cols-3 h-16">
+      <button
+        id="navConsumibles"
+        onclick="switchTab('consumibles')"
+        class="flex flex-col items-center justify-center gap-1 text-indGreenLight border-t-2 border-indGreen bg-indElevated/50 font-bold text-xs"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+        <span>Consumibles</span>
+      </button>
+
+      <button
+        id="navHistorial"
+        onclick="switchTab('historial')"
+        class="flex flex-col items-center justify-center gap-1 text-gray-300 border-t-2 border-transparent font-semibold text-xs"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>Historial</span>
+      </button>
+
+      <button
+        id="navDatos"
+        onclick="switchTab('datos')"
+        class="flex flex-col items-center justify-center gap-1 text-gray-300 border-t-2 border-transparent font-semibold text-xs"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span>Excel / Datos</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MODAL 1: ALTA RÁPIDA DE CONSUMIBLE NUEVO ("DIFERENTE") -->
+  <div id="modalNuevo" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-indCard border-t sm:border border-indBorder w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-4 space-y-4 shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between border-b border-indBorder pb-2.5">
+        <h3 class="text-base font-extrabold text-indGreenLight uppercase">Nuevo Consumible</h3>
+        <button onclick="closeModalNuevo()" class="text-indRedLight bg-indElevated px-3 py-1 rounded-lg text-sm font-bold">
+          Cerrar ✕
+        </button>
+      </div>
+
+      <form onsubmit="guardarNuevoConsumible(event)" class="space-y-3">
+        <!-- Nombre -->
+        <div>
+          <label class="block text-xs font-bold uppercase text-indRedLight mb-1">Nombre del consumible *</label>
+          <input
+            type="text"
+            id="nuevoNombre"
+            required
+            placeholder="Ej: Disco flap grano 60, Precinto 300mm..."
+            class="w-full bg-indDark border border-indBorder focus:border-indGreen rounded-xl px-3.5 py-3 text-sm text-indGreenLight placeholder-gray-400 outline-none"
+          />
+        </div>
+
+        <!-- Rubro / Categoría + Unidad -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-xs font-bold uppercase text-indRedLight mb-1">Rubro / Categoría</label>
+            <input
+              type="text"
+              id="nuevoCategoria"
+              list="categoriasList"
+              value="Taller/Corte"
+              placeholder="Elegí o escribí..."
+              class="w-full bg-indDark border border-indBorder focus:border-indGreen rounded-xl px-3 py-2.5 text-sm text-indGreenLight outline-none"
+            />
+            <datalist id="categoriasList">
+              <option value="Taller/Corte">
+              <option value="Soldadura">
+              <option value="Eléctrico">
+              <option value="Neumática">
+              <option value="Lubricantes">
+              <option value="Limpieza/EPP">
+              <option value="Otros">
+            </datalist>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase text-indRedLight mb-1">Unidad</label>
+            <select
+              id="nuevoUnidad"
+              class="w-full bg-indDark border border-indBorder focus:border-indGreen rounded-xl px-3 py-2.5 text-sm text-indGreenLight outline-none"
+            >
+              <option value="un.">un. (unidad)</option>
+              <option value="disco">disco</option>
+              <option value="electrodo">electrodo</option>
+              <option value="par">par</option>
+              <option value="m">m (metros)</option>
+              <option value="kg">kg (kilos)</option>
+              <option value="L">L (litros)</option>
+              <option value="caja">caja</option>
+              <option value="rollo">rollo</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Cantidad inicial consumida -->
+        <div>
+          <label class="block text-xs font-bold uppercase text-indRedLight mb-1">Cantidad inicial consumida</label>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="ajustarInputNuevo(-1)" class="btn-press bg-indElevated border border-indRed text-indRedLight font-extrabold w-12 h-12 rounded-xl text-xl">-1</button>
+            <input
+              type="number"
+              id="nuevoCantidad"
+              step="any"
+              min="0"
+              value="1"
+              required
+              class="flex-1 bg-indDark border border-indBorder focus:border-indGreen rounded-xl h-12 text-center text-xl font-extrabold text-indGreenLight outline-none"
+            />
+            <button type="button" onclick="ajustarInputNuevo(1)" class="btn-press bg-indElevated border border-indGreen text-indGreenLight font-extrabold w-12 h-12 rounded-xl text-xl">+1</button>
+            <button type="button" onclick="ajustarInputNuevo(5)" class="btn-press bg-indElevated border border-indGreen text-indGreenLight font-extrabold w-12 h-12 rounded-xl text-base">+5</button>
+          </div>
+        </div>
+
+        <!-- Nota opcional -->
+        <div>
+          <label class="block text-xs font-bold uppercase text-gray-300 mb-1">Sector / Nota (opcional)</label>
+          <input
+            type="text"
+            id="nuevoNota"
+            placeholder="Ej: Línea 2, Mantenimiento, Prensa..."
+            class="w-full bg-indDark border border-indBorder focus:border-indGreen rounded-xl px-3.5 py-2.5 text-sm text-gray-200 placeholder-gray-400 outline-none"
+          />
+        </div>
+
+        <button
+          type="submit"
+          class="btn-press w-full bg-indGreen hover:bg-green-500 text-indDark font-extrabold py-3.5 rounded-xl text-base shadow-lg mt-2"
+        >
+          Guardar y Registrar Consumo
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: SUMAR CANTIDAD PERSONALIZADA (+OTRO) -->
+  <div id="modalSumarOtro" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-indCard border-t sm:border border-indBorder w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-4 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-indBorder pb-2.5">
+        <div>
+          <span class="text-[11px] font-bold uppercase text-indRedLight block">Agregar consumo a:</span>
+          <h3 id="modalOtroTitulo" class="text-base font-extrabold text-indGreenLight">Consumible</h3>
+        </div>
+        <button onclick="closeModalOtro()" class="text-indRedLight bg-indElevated px-3 py-1 rounded-lg text-sm font-bold">
+          Cerrar ✕
+        </button>
+      </div>
+
+      <form onsubmit="confirmarSumarOtro(event)" class="space-y-3">
+        <!-- Botones rápidos de suma -->
+        <div class="grid grid-cols-4 gap-2">
+          <button type="button" onclick="setCantidadOtro(2)" class="btn-press bg-indElevated border border-indGreen text-indGreenLight font-extrabold py-2.5 rounded-xl text-sm">+2</button>
+          <button type="button" onclick="setCantidadOtro(5)" class="btn-press bg-indElevated border border-indGreen text-indGreenLight font-extrabold py-2.5 rounded-xl text-sm">+5</button>
+          <button type="button" onclick="setCantidadOtro(10)" class="btn-press bg-indElevated border border-indGreen text-indGreenLight font-extrabold py-2.5 rounded-xl text-sm">+10</button>
+          <button type="button" onclick="setCantidadOtro(20)" class="btn-press bg-indElevated border border-indGreen text-indGreenLight font-extrabold py-2.5 rounded-xl text-sm">+20</button>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase text-indRedLight mb-1">Cantidad a sumar (<span id="modalOtroUnidad">un.</span>)</label>
+          <input
+            type="number"
+            id="inputCantidadOtro"
+            step="any"
+            min="0.01"
+            value="5"
+            required
+            class="w-full bg-indDark border border-indBorder focus:border-indGreen rounded-xl py-3 text-center text-2xl font-extrabold text-indGreenLight outline-none"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase text-gray-300 mb-1">Observación / Sector (opcional)</label>
+          <input
+            type="text"
+            id="inputNotaOtro"
+            placeholder="Ej: Turno tarde, Máquina 3..."
+            class="w-full bg-indDark border border-indBorder focus:border-indGreen rounded-xl px-3.5 py-2.5 text-sm text-gray-200 placeholder-gray-400 outline-none"
+          />
+        </div>
+
+        <button
+          type="submit"
+          class="btn-press w-full bg-indGreen hover:bg-green-500 text-indDark font-extrabold py-3.5 rounded-xl text-base shadow-lg"
+        >
+          Confirmar Consumo
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST DE NOTIFICACIÓN FLOTANTE -->
+  <div
+    id="toast"
+    class="fixed top-16 left-1/2 -translate-x-1/2 z-50 hidden px-4 py-2.5 rounded-xl font-bold text-xs shadow-xl border transition-all duration-200 whitespace-nowrap"
+  ></div>
+
+  <script>
+    // ==========================================
+    // ESTADO Y ALMACENAMIENTO PERSISTENTE
+    // ==========================================
+    const STORAGE_KEY = 'control_consumibles_v1';
+
+    let state = {
+      consumibles: [],
+      movimientos: [],
+      isDemo: false
+    };
+
+    let selectedCategory = 'Todas';
+    let activeOtroId = null;
+    let resetContadoresConfirmado = false;
+    let resetTodoConfirmado = false;
+
+    // Datos iniciales típicos de taller/planta (solo si localStorage está vacío)
+    const DEMO_DATA = [
+      { nombre: 'Disco de corte 115mm', categoria: 'Taller/Corte', unidad: 'disco', total: 4 },
+      { nombre: 'Electrodo 6013 2.5mm', categoria: 'Soldadura', unidad: 'electrodo', total: 15 },
+      { nombre: 'Precintos negros 200mm', categoria: 'Eléctrico', unidad: 'un.', total: 25 },
+      { nombre: 'Cinta aisladora negra', categoria: 'Eléctrico', unidad: 'rollo', total: 2 },
+      { nombre: 'Guantes moteados', categoria: 'Limpieza/EPP', unidad: 'par', total: 3 }
+    ];
+
+    function initApp() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          state.consumibles = Array.isArray(parsed.consumibles) ? parsed.consumibles : [];
+          state.movimientos = Array.isArray(parsed.movimientos) ? parsed.movimientos : [];
+          state.isDemo = Boolean(parsed.isDemo);
+        } else {
+          cargarEjemplosIniciales();
+        }
+      } catch (e) {
+        console.error('Error leyendo localStorage:', e);
+        cargarEjemplosIniciales();
+      }
+      actualizarUI();
+    }
+
+    function cargarEjemplosIniciales() {
+      const ahora = new Date();
+      state.consumibles = [];
+      state.movimientos = [];
+      state.isDemo = true;
+
+      DEMO_DATA.forEach((item, idx) => {
+        const id = 'demo_' + idx + '_' + Date.now();
+        const fechaStr = formatFechaHora(new Date(ahora.getTime() - idx * 3600000));
+        state.consumibles.push({
+          id,
+          nombre: item.nombre,
+          categoria: item.categoria,
+          unidad: item.unidad,
+          total: item.total,
+          ultimoMov: fechaStr
+        });
+        state.movimientos.push({
+          id: 'mov_' + id,
+          consumibleId: id,
+          nombre: item.nombre,
+          categoria: item.categoria,
+          unidad: item.unidad,
+          delta: item.total,
+          nota: 'Carga inicial de ejemplo',
+          fecha: fechaStr
+        });
+      });
+      saveState();
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        showToast('Error al guardar en el dispositivo', 'red');
+      }
+    }
+
+    // ==========================================
+    // UTILIDADES DE FECHA Y FORMATO
+    // ==========================================
+    function formatFechaHora(date = new Date()) {
+      const d = String(date.getDate()).padStart(2, '0');
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const y = date.getFullYear();
+      const hh = String(date.getHours()).padStart(2, '0');
+      const mm = String(date.getMinutes()).padStart(2, '0');
+      return `${d}/${m}/${y} ${hh}:${mm}`;
+    }
+
+    function formatNumero(n) {
+      const num = Number(n);
+      if (Number.isInteger(num)) return num.toString();
+      return num.toFixed(2).replace(/\.?0+$/, '');
+    }
+
+    function showToast(msg, type = 'green') {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl font-extrabold text-xs shadow-2xl border transition-all duration-200 whitespace-nowrap';
+      if (type === 'red') {
+        toast.classList.add('bg-indCard', 'text-indRedLight', 'border-indRed');
+      } else {
+        toast.classList.add('bg-indCard', 'text-indGreenLight', 'border-indGreen');
+      }
+      toast.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 2200);
+    }
+
+    // ==========================================
+    // LÓGICA DE CONSUMIBLES Y MOVIMIENTOS
+    // ==========================================
+    function registrarCambioCantidad(consumibleId, delta, nota = '') {
+      const item = state.consumibles.find(c => c.id === consumibleId);
+      if (!item) return;
+
+      const nuevoTotal = Math.round((Number(item.total) + Number(delta)) * 1000) / 1000;
+      if (nuevoTotal < 0) {
+        showToast('El total no puede ser menor a 0', 'red');
+        return;
+      }
+
+      const fechaStr = formatFechaHora(new Date());
+      item.total = nuevoTotal;
+      item.ultimoMov = fechaStr;
+
+      state.movimientos.unshift({
+        id: 'mov_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        consumibleId: item.id,
+        nombre: item.nombre,
+        categoria: item.categoria,
+        unidad: item.unidad,
+        delta: Number(delta),
+        nota: nota.trim(),
+        fecha: fechaStr
+      });
+
+      saveState();
+      actualizarUI();
+
+      const signo = delta > 0 ? '+' : '';
+      showToast(`${signo}${formatNumero(delta)} ${item.unidad} · ${item.nombre}`, delta > 0 ? 'green' : 'red');
+    }
+
+    function guardarNuevoConsumible(e) {
+      e.preventDefault();
+      const nombre = document.getElementById('nuevoNombre').value.trim();
+      const categoria = document.getElementById('nuevoCategoria').value.trim() || 'Otros';
+      const unidad = document.getElementById('nuevoUnidad').value;
+      const cantidad = parseFloat(document.getElementById('nuevoCantidad').value) || 0;
+      const nota = document.getElementById('nuevoNota').value.trim();
+
+      if (!nombre) return;
+
+      // Verificar si ya existe con el mismo nombre (insensible a mayúsculas)
+      const existente = state.consumibles.find(
+        c => c.nombre.toLowerCase() === nombre.toLowerCase()
+      );
+
+      if (existente) {
+        if (cantidad > 0) {
+          registrarCambioCantidad(existente.id, cantidad, nota || 'Sumado desde alta rápida');
+        } else {
+          showToast('Ese consumible ya existe en la lista', 'red');
+        }
+        closeModalNuevo();
+        return;
+      }
+
+      const fechaStr = formatFechaHora(new Date());
+      const nuevoId = 'item_' + Date.now();
+
+      const nuevoItem = {
+        id: nuevoId,
+        nombre,
+        categoria,
+        unidad,
+        total: cantidad,
+        ultimoMov: cantidad > 0 ? fechaStr : 'Sin movimientos'
+      };
+
+      state.consumibles.unshift(nuevoItem);
+
+      if (cantidad > 0) {
+        state.movimientos.unshift({
+          id: 'mov_' + Date.now(),
+          consumibleId: nuevoId,
+          nombre,
+          categoria,
+          unidad,
+          delta: cantidad,
+          nota: nota || 'Alta de consumible',
+          fecha: fechaStr
+        });
+      }
+
+      saveState();
+      closeModalNuevo();
+      selectedCategory = 'Todas';
+      actualizarUI();
+      showToast(`Agregado: ${nombre}`, 'green');
+    }
+
+    function eliminarConsumible(id) {
+      const item = state.consumibles.find(c => c.id === id);
+      if (!item) return;
+
+      // Doble toque en botón eliminar para evitar borrados accidentales sin usar confirm()
+      const btn = document.getElementById(`del_btn_${id}`);
+      if (btn && btn.dataset.armed !== 'true') {
+        btn.dataset.armed = 'true';
+        btn.textContent = '¿Seguro?';
+        btn.classList.add('bg-indRed', 'text-white');
+        setTimeout(() => {
+          if (btn) {
+            btn.dataset.armed = 'false';
+            btn.textContent = 'Borrar';
+            btn.classList.remove('bg-indRed', 'text-white');
+          }
+        }, 3000);
+        return;
+      }
+
+      state.consumibles = state.consumibles.filter(c => c.id !== id);
+      saveState();
+      actualizarUI();
+      showToast(`Eliminado: ${item.nombre}`, 'red');
+    }
+
+    function eliminarMovimiento(movId) {
+      const idx = state.movimientos.findIndex(m => m.id === movId);
+      if (idx === -1) return;
+
+      const mov = state.movimientos[idx];
+      // Revertir el delta en el consumible si aún existe
+      const item = state.consumibles.find(c => c.id === mov.consumibleId);
+      if (item) {
+        item.total = Math.max(0, Math.round((Number(item.total) - Number(mov.delta)) * 1000) / 1000);
+      }
+
+      state.movimientos.splice(idx, 1);
+      saveState();
+      actualizarUI();
+      showToast('Movimiento eliminado y ajustado', 'red');
+    }
+
+    function limpiarEjemplos() {
+      state.consumibles = state.consumibles.filter(c => !c.id.startsWith('demo_'));
+      state.movimientos = state.movimientos.filter(m => !m.id.startsWith('mov_demo_'));
+      state.isDemo = false;
+      saveState();
+      actualizarUI();
+      showToast('Ejemplos eliminados · Listo para cargar', 'green');
+    }
+
+    // ==========================================
+    // RENDERIZADO DE INTERFAZ
+    // ==========================================
+    function actualizarUI() {
+      // Banner de ejemplos
+      const demoBanner = document.getElementById('demoBanner');
+      if (state.isDemo && state.consumibles.some(c => c.id.startsWith('demo_'))) {
+        demoBanner.classList.remove('hidden');
+      } else {
+        demoBanner.classList.add('hidden');
+      }
+
+      // Estadísticas del header
+      const totalItems = state.consumibles.length;
+      const sumaUnidades = state.consumibles.reduce((acc, c) => acc + Number(c.total || 0), 0);
+      document.getElementById('headerStats').textContent =
+        `${totalItems} consumible${totalItems === 1 ? '' : 's'} · ${formatNumero(sumaUnidades)} acumulados`;
+
+      renderCategories();
+      renderConsumibles();
+      renderHistorial();
+    }
+
+    function renderCategories() {
+      const container = document.getElementById('categoryChips');
+      const categoriasUnicas = ['Todas', ...new Set(state.consumibles.map(c => c.categoria).filter(Boolean))];
+
+      if (!categoriasUnicas.includes(selectedCategory)) {
+        selectedCategory = 'Todas';
+      }
+
+      container.innerHTML = categoriasUnicas.map(cat => {
+        const active = cat === selectedCategory;
+        return `
+          <button
+            onclick="selectCategory('${cat.replace(/'/g, "\\'")}')"
+            class="btn-press shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold border transition ${
+              active
+                ? 'bg-indGreen text-indDark border-indGreen shadow-sm'
+                : 'bg-indCard text-gray-300 border-indBorder hover:border-indGreen'
+            }"
+          >
+            ${cat}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectCategory(cat) {
+      selectedCategory = cat;
+      renderCategories();
+      renderConsumibles();
+    }
+
+    function clearSearch() {
+      const input = document.getElementById('searchInput');
+      input.value = '';
+      renderConsumibles();
+    }
+
+    function renderConsumibles() {
+      const listEl = document.getElementById('consumiblesList');
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const clearBtn = document.getElementById('clearSearchBtn');
+
+      if (query.length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+
+      const filtrados = state.consumibles.filter(c => {
+        const matchCat = selectedCategory === 'Todas' || c.categoria === selectedCategory;
+        const matchText =
+          !query ||
+          c.nombre.toLowerCase().includes(query) ||
+          c.categoria.toLowerCase().includes(query);
+        return matchCat && matchText;
+      });
+
+      if (filtrados.length === 0) {
+        listEl.innerHTML = `
+          <div class="bg-indCard border border-indBorder rounded-2xl p-6 text-center space-y-2">
+            <p class="text-sm font-bold text-indRedLight">No se encontraron consumibles</p>
+            <p class="text-xs text-gray-300">Tocá el botón verde "+ Nuevo" arriba para agregar uno diferente.</p>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = filtrados.map(item => `
+        <article class="bg-indCard border border-indBorder rounded-2xl p-3.5 shadow-md space-y-3">
+          <!-- Cabecera de tarjeta: Nombre, categoría y contador grande en VERDE -->
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indElevated text-indRedLight border border-indBorder">
+                  ${escapeHTML(item.categoria)}
+                </span>
+                <button
+                  id="del_btn_${item.id}"
+                  onclick="eliminarConsumible('${item.id}')"
+                  class="text-[11px] font-semibold text-indRedLight/80 hover:text-indRedLight px-1.5 py-0.5 rounded transition"
+                >
+                  Borrar
+                </button>
+              </div>
+              <h3 class="text-base font-extrabold text-indGreenLight leading-snug mt-1.5 break-words">
+                ${escapeHTML(item.nombre)}
+              </h3>
+              <p class="text-xs text-gray-300 mt-1">
+                Último: <span class="text-indRedLight font-semibold">${escapeHTML(item.ultimoMov || 'Sin registros')}</span>
+              </p>
+            </div>
+
+            <!-- Total acumulado en verde de alto contraste -->
+            <div class="bg-indDark border border-indBorder rounded-xl px-3 py-2 text-right shrink-0 min-w-[84px]">
+              <span class="block text-2xl font-extrabold text-indGreen leading-none">
+                ${formatNumero(item.total)}
+              </span>
+              <span class="block text-[11px] font-bold text-gray-300 uppercase mt-1">
+                ${escapeHTML(item.unidad)}
+              </span>
+            </div>
+          </div>
+
+          <!-- Botonera táctil directa: -1 en ROJO, +1 y +Otro en VERDE -->
+          <div class="grid grid-cols-12 gap-2 pt-1">
+            <button
+              onclick="registrarCambioCantidad('${item.id}', -1)"
+              class="btn-press col-span-3 bg-indElevated hover:bg-indRed/20 border border-indRed text-indRedLight font-extrabold py-3 rounded-xl text-base flex items-center justify-center shadow-xs"
+              title="Restar 1"
+            >
+              -1
+            </button>
+
+            <button
+              onclick="registrarCambioCantidad('${item.id}', 1)"
+              class="btn-press col-span-5 bg-indGreen hover:bg-green-500 text-indDark font-extrabold py-3 rounded-xl text-base flex items-center justify-center gap-1 shadow-sm"
+            >
+              <span>+1 ${escapeHTML(item.unidad)}</span>
+            </button>
+
+            <button
+              onclick="openModalOtro('${item.id}')"
+              class="btn-press col-span-4 bg-indElevated hover:bg-indGreen/20 border border-indGreen text-indGreenLight font-extrabold py-3 rounded-xl text-sm flex items-center justify-center"
+            >
+              + Otro
+            </button>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function renderHistorial() {
+      const listEl = document.getElementById('historialList');
+      const countEl = document.getElementById('historialCount');
+
+      countEl.textContent = `${state.movimientos.length} movimiento${state.movimientos.length === 1 ? '' : 's'} registrado${state.movimientos.length === 1 ? '' : 's'}`;
+
+      if (state.movimientos.length === 0) {
+        listEl.innerHTML = `
+          <div class="bg-indCard border border-indBorder rounded-2xl p-6 text-center">
+            <p class="text-sm font-bold text-indRedLight">Todavía no hay movimientos</p>
+            <p class="text-xs text-gray-300 mt-1">Cada vez que sumes o restes un consumible va a quedar registrado acá con fecha y hora.</p>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = state.movimientos.map(mov => {
+        const esPositivo = Number(mov.delta) >= 0;
+        const signo = esPositivo ? '+' : '';
+        return `
+          <div class="bg-indCard border border-indBorder rounded-xl p-3 flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-extrabold px-2 py-0.5 rounded-md ${
+                  esPositivo
+                    ? 'bg-indGreen/20 text-indGreenLight border border-indGreen/50'
+                    : 'bg-indRed/20 text-indRedLight border border-indRed/50'
+                }">
+                  ${signo}${formatNumero(mov.delta)} ${escapeHTML(mov.unidad)}
+                </span>
+                <span class="text-[11px] text-indRedLight font-semibold">${escapeHTML(mov.fecha)}</span>
+              </div>
+              <p class="text-sm font-bold text-gray-100 truncate mt-1">${escapeHTML(mov.nombre)}</p>
+              ${mov.nota ? `<p class="text-xs text-gray-300 truncate mt-0.5">Nota: ${escapeHTML(mov.nota)}</p>` : ''}
+            </div>
+
+            <button
+              onclick="eliminarMovimiento('${mov.id}')"
+              class="btn-press shrink-0 bg-indElevated hover:bg-indRed/20 border border-indBorder hover:border-indRed text-indRedLight text-xs font-bold px-2.5 py-2 rounded-lg"
+              title="Anular movimiento"
+            >
+              ✕
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ==========================================
+    // NAVEGACIÓN DE PESTAÑAS Y MODALES
+    // ==========================================
+    function switchTab(tab) {
+      const views = {
+        consumibles: document.getElementById('viewConsumibles'),
+        historial: document.getElementById('viewHistorial'),
+        datos: document.getElementById('viewDatos')
+      };
+      const navs = {
+        consumibles: document.getElementById('navConsumibles'),
+        historial: document.getElementById('navHistorial'),
+        datos: document.getElementById('navDatos')
+      };
+
+      Object.keys(views).forEach(k => {
+        if (k === tab) {
+          views[k].classList.remove('hidden');
+          navs[k].classList.add('text-indGreenLight', 'border-indGreen', 'bg-indElevated/50', 'font-bold');
+          navs[k].classList.remove('text-gray-300', 'border-transparent', 'font-semibold');
+        } else {
+          views[k].classList.add('hidden');
+          navs[k].classList.remove('text-indGreenLight', 'border-indGreen', 'bg-indElevated/50', 'font-bold');
+          navs[k].classList.add('text-gray-300', 'border-transparent', 'font-semibold');
+        }
+      });
+    }
+
+    function openModalNuevo() {
+      document.getElementById('nuevoNombre').value = '';
+      document.getElementById('nuevoCantidad').value = '1';
+      document.getElementById('nuevoNota').value = '';
+      document.getElementById('modalNuevo').classList.remove('hidden');
+      setTimeout(() => document.getElementById('nuevoNombre').focus(), 100);
+    }
+
+    function closeModalNuevo() {
+      document.getElementById('modalNuevo').classList.add('hidden');
+    }
+
+    function ajustarInputNuevo(delta) {
+      const input = document.getElementById('nuevoCantidad');
+      const val = Math.max(0, (parseFloat(input.value) || 0) + delta);
+      input.value = formatNumero(val);
+    }
+
+    function openModalOtro(id) {
+      const item = state.consumibles.find(c => c.id === id);
+      if (!item) return;
+      activeOtroId = id;
+      document.getElementById('modalOtroTitulo').textContent = item.nombre;
+      document.getElementById('modalOtroUnidad').textContent = item.unidad;
+      document.getElementById('inputCantidadOtro').value = '5';
+      document.getElementById('inputNotaOtro').value = '';
+      document.getElementById('modalSumarOtro').classList.remove('hidden');
+      setTimeout(() => document.getElementById('inputCantidadOtro').select(), 100);
+    }
+
+    function closeModalOtro() {
+      document.getElementById('modalSumarOtro').classList.add('hidden');
+      activeOtroId = null;
+    }
+
+    function setCantidadOtro(val) {
+      document.getElementById('inputCantidadOtro').value = val;
+    }
+
+    function confirmarSumarOtro(e) {
+      e.preventDefault();
+      if (!activeOtroId) return;
+      const cant = parseFloat(document.getElementById('inputCantidadOtro').value);
+      const nota = document.getElementById('inputNotaOtro').value;
+      if (!cant || cant <= 0) {
+        showToast('Ingresá una cantidad mayor a 0', 'red');
+        return;
+      }
+      registrarCambioCantidad(activeOtroId, cant, nota);
+      closeModalOtro();
+    }
+
+    // ==========================================
+    // EXPORTACIÓN CSV / JSON Y REINICIO
+    // ==========================================
+    function exportarCSV() {
+      if (state.consumibles.length === 0 && state.movimientos.length === 0) {
+        showToast('No hay datos para exportar', 'red');
+        return;
+      }
+
+      const BOM = '\uFEFF';
+      let csv = BOM + 'RESUMEN DE CONSUMIBLES ACUMULADOS\n';
+      csv += 'Consumible;Rubro/Categoría;Total Consumido;Unidad;Último Movimiento\n';
+
+      state.consumibles.forEach(c => {
+        csv += `"${c.nombre.replace(/"/g, '""')}";"${c.categoria.replace(/"/g, '""')}";${String(c.total).replace('.', ',')};"${c.unidad}";"${c.ultimoMov || ''}"\n`;
+      });
+
+      csv += '\nDETALLE CRONOLÓGICO DE MOVIMIENTOS\n';
+      csv += 'Fecha y Hora;Consumible;Categoría;Cantidad;Unidad;Observación\n';
+
+      state.movimientos.forEach(m => {
+        csv += `"${m.fecha}";"${m.nombre.replace(/"/g, '""')}";"${m.categoria.replace(/"/g, '""')}";${String(m.delta).replace('.', ',')};"${m.unidad}";"${(m.nota || '').replace(/"/g, '""')}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const fechaArchivo = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `consumibles_${fechaArchivo}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Archivo Excel (CSV) descargado', 'green');
+    }
+
+    function exportarJSON() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const fechaArchivo = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `respaldo_consumibles_${fechaArchivo}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Respaldo JSON guardado', 'green');
+    }
+
+    function importarJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!Array.isArray(data.consumibles) || !Array.isArray(data.movimientos)) {
+            throw new Error('Formato inválido');
+          }
+          state = {
+            consumibles: data.consumibles,
+            movimientos: data.movimientos,
+            isDemo: false
+          };
+          saveState();
+          actualizarUI();
+          showToast('Respaldo restaurado correctamente', 'green');
+        } catch (err) {
+          showToast('El archivo de respaldo no es válido', 'red');
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function confirmarResetContadores() {
+      const btn = document.getElementById('btnResetContadores');
+      if (!resetContadoresConfirmado) {
+        resetContadoresConfirmado = true;
+        btn.textContent = 'TOCÁ DE NUEVO PARA PONER TODO EN 0';
+        btn.classList.add('bg-indRed', 'text-white');
+        setTimeout(() => {
+          resetContadoresConfirmado = false;
+          btn.textContent = 'Poner Contadores en 0';
+          btn.classList.remove('bg-indRed', 'text-white');
+        }, 3500);
+        return;
+      }
+
+      state.consumibles.forEach(c => {
+        c.total = 0;
+        c.ultimoMov = 'Reiniciado a 0';
+      });
+      state.movimientos = [];
+      resetContadoresConfirmado = false;
+      btn.textContent = 'Poner Contadores en 0';
+      btn.classList.remove('bg-indRed', 'text-white');
+      saveState();
+      actualizarUI();
+      showToast('Todos los contadores volvieron a 0', 'red');
+    }
+
+    function confirmarResetTodo() {
+      const btn = document.getElementById('btnResetTodo');
+      if (!resetTodoConfirmado) {
+        resetTodoConfirmado = true;
+        btn.textContent = '¿SEGURO? TOCÁ OTRA VEZ PARA BORRAR TODO';
+        setTimeout(() => {
+          resetTodoConfirmado = false;
+          btn.textContent = 'Borrar Todo el Sistema';
+        }, 3500);
+        return;
+      }
+
+      state = { consumibles: [], movimientos: [], isDemo: false };
+      resetTodoConfirmado = false;
+      btn.textContent = 'Borrar Todo el Sistema';
+      saveState();
+      actualizarUI();
+      showToast('Sistema borrado por completo', 'red');
+    }
+
+    // Arrancar aplicación al cargar
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
